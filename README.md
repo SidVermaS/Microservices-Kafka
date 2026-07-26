@@ -95,11 +95,11 @@ That starts Kafka, creates the `orders` topic, boots both services, and launches
 ```bash
 curl -X POST http://localhost:3000/api/order \
   -H "Content-Type: application/json" \
-  -d '{"item":"iPhone 17","amount":79999}'
+  -d '{"item":"Margherita Pizza","amount":499}'
 ```
 
 ```json
-{ "status": "ORDER_PLACED", "id": "8f3c…", "item": "iPhone 17", "amount": 79999 }
+{ "status": "ORDER_PLACED", "id": "8f3c…", "item": "Margherita Pizza", "amount": 499 }
 ```
 
 The response comes back instantly — order-service is already done.
@@ -111,7 +111,7 @@ curl http://localhost:3001/api/notifications
 ```
 
 ```json
-[{ "orderId": "8f3c…", "text": "Your iPhone 17 (₹79999) is confirmed!" }]
+[{ "orderId": "8f3c…", "text": "Your Margherita Pizza (₹499) is confirmed!" }]
 ```
 
 notification-service produced that on its own, from the Kafka event.
@@ -119,8 +119,8 @@ notification-service produced that on its own, from the Kafka event.
 ### 3. Watch it in the logs
 
 ```
-order-service         | 📤 order placed → iPhone 17
-notification-service  | 📥 orders[0] offset 0 → Your iPhone 17 (₹79999) is confirmed!
+order-service         | 📤 order placed → Margherita Pizza
+notification-service  | 📥 orders[0] offset 0 → Your Margherita Pizza (₹499) is confirmed!
 ```
 
 ### 4. Prove the decoupling (the best part 🎯)
@@ -132,7 +132,7 @@ docker compose stop notification-service
 
 curl -X POST http://localhost:3000/api/order \
   -H "Content-Type: application/json" \
-  -d '{"item":"AirPods","amount":24999}'
+  -d '{"item":"Cappuccino","amount":199}'
 # ✅ still returns ORDER_PLACED — order-service doesn't care
 ```
 
