@@ -1,240 +1,266 @@
-# Microservices communication with Kafka
+# Microservices + Kafka — in 30 lines of code
 
-A tiny, runnable example of **two microservices that never call each other.**
+A tiny, runnable demo that shows **how two microservices talk to each other without ever calling each other**.
 
-`order-service` receives an order and publishes an event.
-`notification-service` reacts to that event and sends the confirmation.
+You place an order. A notification appears. The two services never exchange a single HTTP request — **Kafka** sits in the middle.
 
-Neither service knows the other exists.
-
-![How the order event flows through Kafka](docs/kafka-flow.png)
+> 📱 This repo is the code behind an Instagram reel tutorial. Clone it, run one command, and watch the concept happen live.
 
 ---
 
-## The one idea
+## The idea in one picture
 
-Open both services and search for the string `"orders"`:
+<p align="center">
+  <img src="docs/kafka-flow.png" alt="POST /api/order → order-service (producer) → Kafka topic 'orders' → notification-service (consumer)" width="300">
+</p>
 
-```js
-// order-service/src/index.js
-await producer.send({ topic: "orders", messages: [...] });
-
-// notification-service/src/index.js
-await consumer.subscribe({ topics: ["orders"] });
+```
+POST /api/order
+      │
+      ▼
+┌──────────────────┐        ┌─────────────────┐        ┌────────────────────────┐
+│  order-service   │───────▶│      Kafka      │───────▶│  notification-service  │
+│    PRODUCER      │  write │ topic: "orders" │   read │       CONSUMER         │
+│      :3000       │        │                 │        │         :3001          │
+└──────────────────┘        └─────────────────┘        └────────────────────────┘
 ```
 
-**That string is the only connection between them.**
+**order-service** doesn't know notification-service exists. It just shouts *"an order happened!"* into a Kafka topic and replies to the user immediately.
 
-`order-service` contains no URL, no port number, and no mention of
-`notification-service` anywhere. It writes an event to a topic named `orders`
-and moves on. Whoever subscribes to that topic gets it.
+**notification-service** is listening to that topic. Whenever a message shows up, it reacts.
 
-This is the difference between *calling a service* and *publishing an event*.
+That's the whole lesson.
 
 ---
 
-## Why not just call the other service directly?
+## Why this matters (the microservices part)
 
-The obvious approach is for `order-service` to make an HTTP request:
+The naive way to build this is a direct call:
 
 ```js
-await axios.post("http://notification-service:3001/send", order);  // ❌
+// ❌ order-service calling notification-service directly
+await fetch("http://notification-service:3001/notify", { ... });
 ```
 
-That works, until it doesn't:
+Looks harmless. But now:
 
-| Problem | Direct HTTP call | Kafka event |
-|---|---|---|
-| Notification service is **down** | Order fails | Order is safe in the log |
-| Notification service is **slow** | Your customer waits | Customer gets an instant reply |
-| You add a **third** service (analytics, invoicing) | Change order-service, redeploy | Change nothing — it subscribes |
-| Who knows about whom | order-service needs the URL | Neither knows the other |
+| Problem | What goes wrong |
+| --- | --- |
+| **Tight coupling** | order-service must know the URL, the payload shape, and the uptime of notification-service. |
+| **Cascading failure** | notification-service is down → the order request fails too. |
+| **Slow responses** | The user waits for the notification to be sent before seeing "order placed". |
+| **Hard to extend** | Want an analytics-service too? Now order-service has to call *two* services. Then three. Then five. |
 
-The order API replies in **~10 ms** because it never waits for the
-notification to be sent. It only waits for Kafka to accept the event.
+With Kafka in the middle:
 
-> **When you *do* want a direct call:** if you need an answer back right now —
-> checking stock, validating a payment — call the service directly.
-> Kafka is for *"this happened, react whenever you can."*
+| Benefit | Why |
+| --- | --- |
+| **Decoupled** | order-service only knows the topic name `"orders"`. |
+| **Resilient** | notification-service can be offline. Messages wait in the topic and get processed when it comes back. |
+| **Fast** | order-service replies the instant the event is written. |
+| **Extensible** | Add analytics-service, email-service, fraud-service — they all subscribe to the same topic. **Zero changes to order-service.** |
+
+That last row is the reason event-driven architecture exists.
 
 ---
 
-## Vocabulary
+## Kafka vocabulary (only 5 words you need)
 
-You only need five words for this example.
+| Term | Plain English | In this repo |
+| --- | --- | --- |
+| **Broker** | The Kafka server that stores messages. | The `kafka` container |
+| **Topic** | A named log — like a channel messages get appended to. | `"orders"` |
+| **Producer** | Anyone who writes messages to a topic. | order-service |
+| **Consumer** | Anyone who reads messages from a topic. | notification-service |
+| **Offset** | A message's position in the log. Consumers remember where they left off. | Printed in the consumer's logs |
 
-| Term | What it means here |
-|---|---|
-| **Broker** | The Kafka server itself. Runs in Docker on port `9092`. Think of it like a database: separate server, own port, stores data on disk. |
-| **Topic** | A named stream of events. Ours is called `orders`. |
-| **Producer** | Anything that writes events to a topic. Here: `order-service`. |
-| **Consumer** | Anything that reads events from a topic. Here: `notification-service`. |
-| **Offset** | The position of an event in the topic — `0`, `1`, `2`… The broker remembers how far each consumer has read. |
-
-**Kafka is not a queue where messages disappear after delivery.** It's a *log*.
-Events are appended in order and stay on disk (7 days by default), and each
-consumer just tracks its own position in that log.
+The key mental model: **a Kafka topic is not a queue that empties — it's a log that you read a cursor through.** Messages stay put. Ten different services can each read the same topic at their own pace, and none of them affect the others.
 
 ---
 
 ## Run it
 
-You need **Docker** installed. Nothing else.
+**Requirement:** Docker.
 
 ```bash
+git clone https://github.com/SidVermaS/Microservices-Kafka.git
+cd Microservices-Kafka
 docker compose up --build
 ```
 
-That starts five things: the Kafka broker, a one-shot container that creates the
-`orders` topic, both microservices, and a web UI.
+That starts Kafka, creates the `orders` topic, boots both services, and launches a Kafka UI.
 
-| | |
-|---|---|
-| order-service | http://localhost:3000 |
-| notification-service | http://localhost:3001 |
-| Kafka UI | http://localhost:8080 |
-
-### Place an order
+### 1. Place an order
 
 ```bash
-curl -X POST localhost:3000/api/order \
-  -H 'Content-Type: application/json' \
-  -d '{"item":"Biryani","amount":249}'
+curl -X POST http://localhost:3000/api/order \
+  -H "Content-Type: application/json" \
+  -d '{"item":"iPhone 17","amount":79999}'
 ```
 
 ```json
-{ "status": "ORDER_PLACED", "id": "721d1a6b-…", "item": "Biryani", "amount": 249 }
+{ "status": "ORDER_PLACED", "id": "8f3c…", "item": "iPhone 17", "amount": 79999 }
 ```
 
-Now look at the logs of **both** services:
+The response comes back instantly — order-service is already done.
 
-```
-order-service-1         | 📤 order placed → Biryani
-notification-service-1  | 📥 orders[0] offset 0 → Your Biryani (₹249) is confirmed!
-```
-
-`order-service` published. `notification-service` reacted. No HTTP call between them.
-
-### See what the other service received
+### 2. See the notification
 
 ```bash
-curl localhost:3001/api/notifications
+curl http://localhost:3001/api/notifications
 ```
 
----
-
-## Look inside the broker
-
-This is the part that makes Kafka click. The event is not "in transit" — it is
-**stored**, and you can go read it.
-
-**Option 1 — the UI:** open http://localhost:8080 → **Topics** → **orders** →
-**Messages**. Every order is a row with its offset, timestamp, key, and JSON value.
-
-**Option 2 — tail the topic from the terminal:**
-
-```bash
-docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
-  --bootstrap-server localhost:9092 --topic orders \
-  --formatter-property print.offset=true
+```json
+[{ "orderId": "8f3c…", "text": "Your iPhone 17 (₹79999) is confirmed!" }]
 ```
 
+notification-service produced that on its own, from the Kafka event.
+
+### 3. Watch it in the logs
+
 ```
-Offset:0  {"id":"721d1a6b-…","item":"Biryani","amount":249}
-Offset:1  {"id":"82364813-…","item":"Masala Dosa","amount":120}
+order-service         | 📤 order placed → iPhone 17
+notification-service  | 📥 orders[0] offset 0 → Your iPhone 17 (₹79999) is confirmed!
 ```
 
-Add `--from-beginning` to replay everything already in the topic.
+### 4. Prove the decoupling (the best part 🎯)
 
----
-
-## Experiments worth doing
-
-**1. Stop the consumer and keep ordering.**
+Kill the consumer and keep ordering:
 
 ```bash
 docker compose stop notification-service
-curl -X POST localhost:3000/api/order -H 'Content-Type: application/json' -d '{"item":"Dosa","amount":120}'
+
+curl -X POST http://localhost:3000/api/order \
+  -H "Content-Type: application/json" \
+  -d '{"item":"AirPods","amount":24999}'
+# ✅ still returns ORDER_PLACED — order-service doesn't care
 ```
 
-The order still returns `200` — `order-service` doesn't care. Check the lag:
-
-```bash
-docker compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh \
-  --bootstrap-server localhost:9092 --describe --group notification-service
-```
-
-`LAG` will be above zero: events waiting on disk. Now bring it back:
+Now bring it back:
 
 ```bash
 docker compose start notification-service
 ```
 
-It processes everything it missed. **Nothing was lost, and nothing was retried** —
-because nobody was ever trying to deliver anything.
+It picks up every message it missed, from the exact offset where it stopped. **Nothing was lost.** Try that with a direct HTTP call.
 
-**2. Add a third consumer.** Copy `notification-service`, change the `groupId`
-to `analytics-service`, and subscribe to the same topic. Both services now
-receive every order, and you changed **zero lines** in `order-service`.
+### Browse the topic visually
 
-**3. Break the ordering.** Recreate the topic with `--partitions 3` and place
-several orders. They'll arrive out of order, because Kafka only guarantees
-order *within* a partition. Key by customer instead of a random UUID to fix it.
+Open **http://localhost:8080** — the Kafka UI shows the `orders` topic, its partitions, and every raw message sitting inside it.
 
 ---
 
-## Project layout
+## The code
+
+Two files. That's the whole system.
+
+### Producer — [order-service/src/index.js](order-service/src/index.js)
+
+```js
+const producer = kafka.producer();
+await producer.connect();
+
+app.post("/api/order", async (req, res) => {
+  const order = { id: crypto.randomUUID(), ...req.body };
+
+  // 📤 drop the event on Kafka and reply instantly — no waiting
+  await producer.send({
+    topic: "orders",
+    messages: [{ key: order.id, value: JSON.stringify(order) }],
+  });
+
+  res.json({ status: "ORDER_PLACED", ...order });
+});
+```
+
+Note what's **missing**: no mention of notification-service anywhere.
+
+### Consumer — [notification-service/src/index.js](notification-service/src/index.js)
+
+```js
+const consumer = kafka.consumer({
+  kafkaJS: { groupId: "notification-service", fromBeginning: true },
+});
+await consumer.connect();
+await consumer.subscribe({ topics: ["orders"] });
+
+// 📥 order events arrive here — order-service never calls this service
+await consumer.run({
+  eachMessage: async ({ message }) => {
+    const order = JSON.parse(message.value);
+    sent.push({ orderId: order.id, text: `Your ${order.item} is confirmed!` });
+  },
+});
+```
+
+`groupId` is how Kafka remembers this consumer's offset. Restart the service and it resumes exactly where it left off.
+
+---
+
+## Project structure
 
 ```
 .
-├── docker-compose.yml          Kafka broker, topic creation, both services, UI
+├── docker-compose.yml          # Kafka + topic creation + both services + Kafka UI
 ├── order-service/
-│   └── src/index.js            Express + Kafka producer
-└── notification-service/
-    ├── src/index.js            Express + Kafka consumer
-    └── src/reset.js            demo helper (clears the topic between runs)
+│   ├── src/index.js            # PRODUCER  → POST /api/order
+│   └── Dockerfile
+├── notification-service/
+│   ├── src/index.js            # CONSUMER  → GET /api/notifications
+│   ├── src/reset.js            # demo helper: wipes topic + store between takes
+│   └── Dockerfile
+└── docs/kafka-flow.png
 ```
 
-Each service is its own package with its own `package.json` and `Dockerfile` —
-they are genuinely separate applications that happen to live in one repo.
+## API reference
+
+| Method | Endpoint | Service | Purpose |
+| --- | --- | --- | --- |
+| `POST` | `http://localhost:3000/api/order` | order-service | Place an order → publishes to `orders` |
+| `GET` | `http://localhost:3001/api/notifications` | notification-service | List notifications built from consumed events |
+| `DELETE` | `http://localhost:3001/api/notifications` | notification-service | Reset the demo (clears topic + store) |
 
 ---
 
-## Reset between runs
+## Running without Docker
 
-Clear the topic and the stored notifications without restarting anything:
-
-```bash
-curl -X DELETE localhost:3001/api/notifications
-```
-
-Offsets keep counting up after this. For a completely fresh start at `offset 0`:
+Kafka still needs to run somewhere, so start just that:
 
 ```bash
-docker compose down -v && docker compose up --build
+docker compose up kafka create-topic
 ```
+
+Then in two terminals:
+
+```bash
+cd order-service && npm install && npm start          # :3000
+cd notification-service && npm install && npm start   # :3001
+```
+
+Both default to `localhost:9092`, or set `KAFKA_BROKER` to point elsewhere.
 
 ---
 
-## Running the services outside Docker
+## Try this next
 
-Useful if you want to edit code and see logs in your own terminals.
-The services read `KAFKA_BROKER` and fall back to `localhost:9092`.
+The real payoff is how cheap it is to extend an event-driven system. Add a third service:
 
-```bash
-docker compose up -d kafka create-topic kafka-ui   # infra only
-
-cd notification-service && npm install && npm start   # terminal 1
-cd order-service        && npm install && npm start   # terminal 2
+```js
+const consumer = kafka.consumer({ kafkaJS: { groupId: "analytics-service" } });
+await consumer.subscribe({ topics: ["orders"] });
 ```
+
+A **different `groupId`** means it gets its own copy of every message — running alongside notification-service, neither aware of the other. And order-service? Untouched.
 
 ---
 
-## Stack
+## Tech stack
 
-Node.js 24 · Express 5 · [@confluentinc/kafka-javascript](https://github.com/confluentinc/confluent-kafka-javascript) 1.10 ·
-Apache Kafka 4.3.1 (KRaft — no ZooKeeper) · [kafbat/kafka-ui](https://github.com/kafbat/kafka-ui) 1.5
+- **Node.js 24** + **Express 5**
+- **Apache Kafka 4.3** in KRaft mode (no ZooKeeper)
+- [`@confluentinc/kafka-javascript`](https://github.com/confluentinc/confluent-kafka-javascript) — the official Confluent client
+- **kafbat/kafka-ui** for visual topic browsing
 
-> Most tutorials use `kafkajs`. It has had no release since 2023.
-> `@confluentinc/kafka-javascript` is the maintained client and keeps a
-> KafkaJS-compatible API, so the code looks almost identical.
+---
+
+Built as a teaching demo. Fork it, break it, extend it. ⭐ if it made Kafka click.
