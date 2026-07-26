@@ -1,0 +1,57 @@
+services:
+  kafka:
+    image: apache/kafka:4.3.1
+    ports: ["9092:9092"]
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: DOCKER
+      # HOST = your Node services on the laptop · DOCKER = other containers
+      KAFKA_LISTENERS: HOST://:9092,DOCKER://:19092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: HOST://localhost:9092,DOCKER://kafka:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: HOST:PLAINTEXT,DOCKER:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    healthcheck:
+      test: ["CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 5s
+      timeout: 10s
+      retries: 15
+
+  # creates the "orders" topic once, then exits
+  create-topic:
+    image: apache/kafka:4.3.1
+    depends_on:
+      kafka: { condition: service_healthy }
+    command: >
+      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092
+      --create --if-not-exists --topic orders --partitions 1
+
+  order-service:
+    build: ./order-service
+    ports: ["3000:3000"]
+    environment:
+      KAFKA_BROKER: kafka:19092
+    depends_on:
+      create-topic: { condition: service_completed_successfully }
+
+  notification-service:
+    build: ./notification-service
+    ports: ["3001:3001"]
+    environment:
+      KAFKA_BROKER: kafka:19092
+    depends_on:
+      create-topic: { condition: service_completed_successfully }
+
+  # browse topics + messages at http://localhost:8080
+  kafka-ui:
+    image: kafbat/kafka-ui:v1.5.0
+    ports: ["8080:8080"]
+    depends_on:
+      kafka: { condition: service_healthy }
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:19092
+      DYNAMIC_CONFIG_ENABLED: "true"

@@ -1,0 +1,136 @@
+# ---------------------------------------------------------------------------
+# Dependencies
+# ---------------------------------------------------------------------------
+node_modules/
+jspm_packages/
+web_modules/
+bower_components/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+!.yarn/plugins
+!.yarn/sdks
+!.yarn/versions
+
+# ---------------------------------------------------------------------------
+# Lockfiles
+# ---------------------------------------------------------------------------
+# package-lock.json is COMMITTED on purpose — the Dockerfile runs `npm ci`,
+# which requires it, and it pins exact dependency versions for students.
+npm-shrinkwrap.json
+yarn.lock
+pnpm-lock.yaml
+bun.lockb
+bun.lock
+
+# ---------------------------------------------------------------------------
+# Logs & debug output
+# ---------------------------------------------------------------------------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-debug.log*
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# ---------------------------------------------------------------------------
+# Build / dist output
+# ---------------------------------------------------------------------------
+build/
+dist/
+out/
+lib-cov/
+.next/
+.nuxt/
+.svelte-kit/
+.turbo/
+.parcel-cache/
+.cache/
+.rpt2_cache/
+.rts2_cache_*/
+*.tsbuildinfo
+
+# ---------------------------------------------------------------------------
+# Tests & coverage
+# ---------------------------------------------------------------------------
+coverage/
+*.lcov
+.nyc_output/
+.jest-cache/
+test-results/
+playwright-report/
+blob-report/
+junit.xml
+*.test.log
+
+# ---------------------------------------------------------------------------
+# Environment & secrets
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.json
+
+# ---------------------------------------------------------------------------
+# Runtime / process data
+# ---------------------------------------------------------------------------
+pids/
+*.pid
+*.seed
+*.pid.lock
+*.sock
+
+# ---------------------------------------------------------------------------
+# Tooling caches
+# ---------------------------------------------------------------------------
+.eslintcache
+.stylelintcache
+.node_repl_history
+.npm/
+.yarn-integrity
+*.tgz
+
+# ---------------------------------------------------------------------------
+# Editors & IDEs
+# ---------------------------------------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+.history/
+
+# ---------------------------------------------------------------------------
+# OS files
+# ---------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ---------------------------------------------------------------------------
+# Temp files
+# ---------------------------------------------------------------------------
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig
+*~
